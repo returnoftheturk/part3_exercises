@@ -1,10 +1,12 @@
+require("dotenv").config();
 const express = require("express");
 const morgan = require("morgan");
-const cors = require('cors');
+const cors = require("cors");
 const app = express();
+const Person = require("./models/person");
 app.use(cors());
 app.use(express.json());
-app.use(express.static('dist'));
+app.use(express.static("dist"));
 app.use(
   morgan(function (tokens, req, res) {
     return [
@@ -20,70 +22,47 @@ app.use(
   })
 );
 
-let phonebook = [
-  {
-    id: 1,
-    name: "Arto Hellas 2",
-    number: "040-123456",
-  },
-  {
-    id: 2,
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-  },
-  {
-    id: 3,
-    name: "Dan Abramov",
-    number: "12-43-234345",
-  },
-  {
-    id: 4,
-    name: "Mary Poppendieck",
-    number: "39-23-6423122",
-  },
-];
+const isDuplicatedName = async (name) => {
+  const foundPerson = await Person.find({
+    name,
+  }).exec();
 
-const generateId = () => {
-  return Math.floor(Math.random() * 10000);
+  if (!foundPerson.length) {
+    return false;
+  }
+  return true;
 };
 
-const isDuplicatedName = (name) =>
-  phonebook.find((person) => person.name.toLowerCase() === name.toLowerCase());
-
 app.get("/api/persons", (req, res) => {
-  res.send(phonebook);
+  Person.find({}).then((persons) => {
+    res.json(persons);
+  });
 });
 
-app.get("/", (request, response) => {
-  response.send("<h1>Phonebook API</h1>");
+app.get("/", (request, res) => {
+  res.send("<h1>Phonebook API</h1>");
 });
 
-app.get("/info", (request, response) => {
-  response.send(`
+app.get("/info", (request, res) => {
+  res.send(`
     <p>Phonebook has info for ${phonebook.length} people. <p/>
     <p>${new Date().toString()}<p/>
   `);
 });
 
 app.get("/api/persons/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const person = phonebook.find((person) => person.id === id);
-  if (person) {
-    res.json(person);
-  } else {
-    res.status(404).end();
-  }
+  Person.findById(req.params.id).then((foundPerson) => {
+    res.json(foundPerson);
+  });
 });
 
 app.delete("/api/persons/:id", (req, res) => {
-  const id = Number(req.params.id);
-  phonebook = phonebook.filter((person) => person.id !== id);
-
-  console.log(phonebook);
-  res.status(204).end();
+  Person.findByIdAndDelete(req.params.id).then((_deletedPerson) => {
+    res.status(204).end();
+  });
 });
 
-app.post("/api/persons", (req, res) => {
+app.post("/api/persons", async (req, res) => {
   const body = req.body;
 
   if (!body.name) {
@@ -94,20 +73,32 @@ app.post("/api/persons", (req, res) => {
     return res.status(400).json({
       error: "Number missing",
     });
-  } else if (isDuplicatedName(body.name)) {
-    return res.status(400).json({
-      error: "Name must be unique",
-    });
+  } else {
+    const isNameDuplicate = await isDuplicatedName(body.name);
+    if (isNameDuplicate) {
+      return res.status(400).json({
+        error: "Name must be unique",
+      });
+    }
   }
 
-  const person = {
-    id: generateId(),
+  const person = new Person({
     name: body.name,
     number: body.number,
-  };
+  });
 
-  phonebook = phonebook.concat(person);
-  res.json(person);
+  person.save().then((savedPerson) => {
+    res.json(savedPerson);
+  });
+});
+
+app.put('/api/persons/:id', (req, res) => {
+  Person.findById(req.params.id).then(person => {
+    person.number = req.body.number;
+    person.save().then(savedNote => {
+      res.json(savedNote)
+    })
+  });
 });
 
 const unknownEndpoint = (request, response) => {
@@ -116,7 +107,7 @@ const unknownEndpoint = (request, response) => {
 
 app.use(unknownEndpoint);
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
