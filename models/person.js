@@ -14,8 +14,25 @@ mongoose
   });
 
 const personSchema = new mongoose.Schema({
-  name: String,
-  number: String,
+  name: {
+    type: String,
+    minLength: 5,
+    required: true
+  },
+  number: {
+    type: String,
+    required: true,
+    validate: {
+      validator: function (value) {
+        // The updated regular expression to validate the phone number
+        const phoneRegex =  /^\d{2,3}-\d+$/;
+
+        // Test the phone number against the regex
+        return phoneRegex.test(value);
+      },
+      message: 'Invalid phone number format. Please use the format: 222-1234567 or 22-1234567',
+    },
+  },
 });
 
 personSchema.set("toJSON", {
